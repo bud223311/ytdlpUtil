@@ -1,5 +1,5 @@
 A_ScriptName :=("ytdlpUtil")
-Version :=("v2.2")
+Version :=("v2.2.1")
 A_AllowMainWindow := 1
 A_DetectHiddenWindows :=(1)
 if A_IsCompiled =(1){
@@ -67,7 +67,7 @@ if FileExist(InstallDir "\config.txt"){
         else{ 
             ;If an error occurs due to running an older version, tell the user
             if isUpdate < 0{
-                ConfigError := MsgBox("You'" 're running an older version of the utility, which is causing errors with the saved config. Please use a newer version. Do you wish to downgrade the utility?.',"Version Error", 0x4)
+                ConfigError := MsgBox("You're running an older version of the utility, which is causing errors with the saved config. Please use a newer version.`n`nDo you wish to downgrade the utility?","Version Error", 0x4)
                 if ConfigError =("No"){
                     ExitApp
                 }
