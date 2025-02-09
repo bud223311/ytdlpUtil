@@ -1,5 +1,5 @@
 A_ScriptName :=("ytdlpUtil")
-Version :=("v2.2.1")
+Version :=("v2.3")
 A_AllowMainWindow := 1
 A_DetectHiddenWindows :=(1)
 if A_IsCompiled =(1){
