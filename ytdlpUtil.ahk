@@ -47,6 +47,13 @@ if FileExist(InstallDir "\config.txt"){
         }
         global ConfigDownloads := ConfigFile.ReadLine()
         global ConfigConfigs := ConfigFile.ReadLine()
+        global sessionStringRead := ConfigFile.ReadLine()
+        Loop parse "Brave,Chrome,Chromium,Edge,Firefox,Opera,Vivaldi,Whale", ","{
+        if InStr(sessionStringRead, A_LoopField){
+            global ConfigSessionLogin :=(A_Space "--cookies-from-browser" A_Space sessionStringRead A_Space)
+        }
+        }
+        
         ConfigFile.Close
         if DirExist(ConfigDownloads){
             global ConfigChecker +=1
@@ -419,15 +426,20 @@ Temp :=(unset)
 CustomConfigFilePath :=("Null")
 LaunchGui.Destroy
 LaunchGui :=(unset)
+if not IsSet(ConfigSessionLogin){
+    ConfigSessionLogin :=("")
+}
 ;Create and show GUI and inputs
 MainGUIMenu := Menu()
+MainGUIMenuOpt := Menu()
 MainGUIMenuBar := MenuBar()
 MainGUIMenuBar.Add("&File", MainGUIMenu)
+MainGUIMenuBar.Add("Options", MainGUIMenuOpt)
 MainGUIMenu.Add("&Downloads", MainGUIMenuDownloads)
 MainGUIMenuDownloads(*){
     try Run("C:\Windows\explorer.exe " ConfigDownloads)
 }
-MainGUIMenu.Add("&Install", MainGUIMenuInstall)
+MainGUIMenu.Add("&Directory", MainGUIMenuInstall)
 MainGUIMenuInstall(*){
     try Run("C:\Windows\explorer.exe " InstallDir)
 }
@@ -442,6 +454,88 @@ MainGUIMenuVersions(*){
     VersionsGUIClose(*){   
     }
 }
+
+MainGUIMenuOpt.add("YouTube Login", MainGUIMenuOptLogin)
+MainGUIMenuOptLogin(*){
+    Loop{
+        LoginGUI := Gui("ToolWindow +Owner" MainGUI.Hwnd)
+        try if IsSet(ConfigSessionLogin){
+            LoginGUI.Add("Text",,"You're already logged in with an active YouTube session from " '"' sessionStringRead '".`nWhat action would you like to do?')
+            LoginGUIClose := LoginGUI.Add("Button",,"Close")
+            LoginGUILogout := LoginGUI.Add("Button",,"Logout")
+            break
+        }
+        LoginGUI.Add("Text","X10 Y1","To login with a YouTube account, yt-dlp can use a session that is logged in`n from a supported browser.")
+        LoginGUI.Add("Text","X10 Y35", "Please select your browser:")
+        LoginGUI.Add("Text","X10 Y52","Browser:")
+        LoginGUI.Add("Text","X120 Y52","(Optional) Profile Name:")
+        LoginGUI.Add("Text","X250 Y52","(Optional) Container Name:")
+        LoginGUIList := LoginGUI.Add("DropDownList","W100 X10 Y65 vbrowserList", ["Brave","Chrome","Chromium","Edge","Firefox","Opera","Vivaldi","Whale"])
+        LoginGUI.Add("Edit","W120 X120 Y65 vProfileName","")
+        LoginGUIContainerEdit := LoginGUI.Add("Edit","W120 X250 Y65 +Disabled vContainerName","")
+        LoginGUIContinue := LoginGUI.Add("Button","W60 X310","Continue")
+        LoginGUIList.OnEvent("Change", LoginGUIListChange)
+        LoginGUIListChange(*){
+            sleep 50
+            global LoginGUIContainer :=('"none"')
+            LoginGUIContainerEdit.Opt("+Disabled")
+            if LoginGUIList.Text =("Firefox"){
+                LoginGUIContainerEdit.Opt("-Disabled")
+            }
+        }
+        break
+    }
+
+    LoginGUI.Show()
+
+    try LoginGUIClose.OnEvent("Click", LoginGUICloseClick)
+    LoginGUICloseClick(*){
+        LoginGUI.Destroy
+    }
+    try LoginGUILogout.OnEvent("Click", LoginGUILogoutClick)
+    LoginGUILogoutClick(*){
+        ConfigFile := FileOpen(InstallDir "\config.txt","rw")
+        oldFile := ConfigFile.Read()
+        ConfigFile.Close
+        ConfigFileOverwrite := FileOpen(InstallDir "\config.txt","w")
+        ConfigFileOverwrite.Write(StrReplace(oldFile, sessionStringRead))
+        ConfigFileOverwrite.Close
+        global ConfigSessionLogin :=("")
+        global sessionStringRead :=(unset)
+        LoginGUI.Destroy
+    }
+    try LoginGUIContinue.OnEvent("Click", LoginGUIContinueClick)
+    LoginGUIContinueClick(*){
+        Loop{
+            LoginGUIVar := LoginGUI.Submit()
+            if StrCompare(LoginGUIVar.browserList, "") =(0){
+                break
+            }
+            if StrCompare(LoginGUIVar.ProfileName, "") >(0){
+                LoginGUIVar.ProfileName :=(A_Space '"' LoginGUIVar.ProfileName '"')
+            }
+            if LoginGUIVar.browserList =("Firefox"){
+                if StrCompare(LoginGUIVar.ContainerName, "") =(0){
+                    LoginGUIVar.ContainerName :=(A_space '"none"')
+                }
+            }
+            if StrCompare(LoginGUIVar.ProfileName, "") >(0){
+                    LoginGUIVar.ContainerName :=(A_Space '"' LoginGUIVar.ContainerName '"')
+            }
+            
+            ConfigFile := FileOpen(InstallDir "\config.txt","rw")
+            loop 4{
+                ConfigFile.ReadLine()
+            }
+            ConfigFile.WriteLine(LoginGUIVar.browserList LoginGUIVar.ProfileName LoginGUIVar.ContainerName)
+            ConfigFile.Close
+            global sessionStringRead :=(LoginGUIVar.browserList LoginGUIVar.ProfileName LoginGUIVar.ContainerName)
+            global ConfigSessionLogin :=(A_space "--cookies-from-browser" A_Space LoginGUIVar.browserList LoginGUIVar.ProfileName LoginGUIVar.ContainerName A_Space)
+            break
+        }
+    }
+}
+
 MainGUI := Gui("OwnDialogs", "Downloader")
 MainGUI.MenuBar := MainGUIMenuBar
 MainGUI.MarginX :=("20")
@@ -490,7 +584,6 @@ loop{
         global CustomConfigFilePath :=(A_LoopFileDir)
         }
     }
-
     MainGUIRadioCstm.OnEvent("Click", MainGUIRadioCstmClck)
     MainGUIRadioCstmClck(*){
         MainGUIcstmcfg.Opt("-Disabled")
@@ -551,16 +644,24 @@ loop{
             }
             global ActiveConfig :=('--config-location "' CustomConfigFilePath '\' MainGUIcstmcfg.Text '"' customConfigPath)
         }
-        Run(A_ComSpec " /c yt-dlp " ffmpegOverride A_Space ActiveConfig A_space ytsearch '"' MainGUIEdit.Text '" >>' LogFile " 2>&1",,,&runPID)
+        Run(A_ComSpec " /c yt-dlp " ffmpegOverride A_Space ActiveConfig A_space ConfigSessionLogin ytsearch '"' MainGUIEdit.Text '" >>' LogFile " 2>&1",,,&runPID)
         loop{
             sleep 500
             while WinExist("ahk_pid " runPID){
                 MainGUIStatus.SetText(openlogfile.ReadLine())
-                sleep 300
+                if InStr(openlogfile.ReadLine(), "Error 403: Forbidden"){
+                    Error403 :=(1)
+                }
+                sleep 50
+
             } ;When cmd exits, reset var, notify user, update activity display
             if not WinExist("ahk_pid " runPID){
                 openlogfile.Close
                 MainGUI.Flash
+                try if Error403{
+                    MsgBox('yt-dlp has experienced "Error 403", this is typically a rate-limit set by YouTube.`nPlease log in with your YouTube session under "Options" in the menu, or try again later.')
+                    try Error403(unset)
+                }
                 MainGUIStatus.SetText("Download Finished")
                 return
             }
